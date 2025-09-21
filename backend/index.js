@@ -15,6 +15,24 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
   let username = 'Anonymous';
 
+  const broadcastUsers = () => {
+    const userList = Array.from(users);
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ type: 'users', users: userList }));
+      }
+    });
+  };
+
+  const broadcastEvent = (eventType, username) => {
+    const event = { type: 'event', eventType, username };
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(event));
+      }
+    });
+  };
+
   ws.on('message', (msg) => {
     try {
       const message = JSON.parse(msg);
@@ -23,6 +41,7 @@ wss.on('connection', (ws) => {
         username = message.username;
         users.add(username);
         broadcastUsers();
+        broadcastEvent('join', username);
       } else if (message.type === 'code') {
         wss.clients.forEach(client => {
           if (client !== ws && client.readyState === WebSocket.OPEN) {
@@ -43,14 +62,6 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     users.delete(username);
     broadcastUsers();
+    broadcastEvent('leave', username);
   });
-
-  function broadcastUsers() {
-    const userList = Array.from(users);
-    wss.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ type: 'users', users: userList }));
-      }
-    });
-  }
 });

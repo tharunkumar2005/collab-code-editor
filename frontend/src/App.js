@@ -6,12 +6,15 @@ function App() {
   const [language, setLanguage] = useState('javascript');
   const [username, setUsername] = useState('');
   const [users, setUsers] = useState([]);
+  const [connectionStatus, setConnectionStatus] = useState('Disconnected');
+  const [events, setEvents] = useState([]);
   const codeRef = useRef('');
   const ws = useRef(null);
+  const toastTimeouts = useRef([]);
 
   useEffect(() => {
     if (!username) {
-      const inputName = prompt("Enter your username:", `User${Math.floor(Math.random() * 1000)}`);
+      const inputName = prompt('Enter your username:', `User${Math.floor(Math.random() * 1000)}`);
       setUsername(inputName || `User${Math.floor(Math.random() * 1000)}`);
     }
   }, [username]);
@@ -20,24 +23,38 @@ function App() {
     if (!username) return;
 
     ws.current = new WebSocket('ws://localhost:3000');
+
     ws.current.onopen = () => {
+      setConnectionStatus('Connected');
       ws.current.send(JSON.stringify({ type: 'join', username }));
     };
+
+    ws.current.onclose = () => {
+      setConnectionStatus('Disconnected');
+    };
+
+    ws.current.onerror = () => {
+      setConnectionStatus('Error');
+    };
+
     ws.current.onmessage = (event) => {
       const message = JSON.parse(event.data);
+
       if (message.type === 'users') {
         setUsers(message.users);
       } else if (message.type === 'code') {
         if (message.code !== codeRef.current) {
           setCode(message.code);
         }
+      } else if (message.type === 'event') {
+        addEventNotification(message);
       }
     };
-    ws.current.onclose = () => {
-      console.log('Disconnected from WebSocket server');
-    };
+
     return () => {
       ws.current.close();
+      toastTimeouts.current.forEach(clearTimeout);
+      toastTimeouts.current = [];
     };
   }, [username]);
 
@@ -45,14 +62,22 @@ function App() {
     codeRef.current = code;
   }, [code]);
 
+  const addEventNotification = (message) => {
+    setEvents((prev) => [...prev, message]);
+    const timeoutId = setTimeout(() => {
+      setEvents((prev) => prev.filter((e) => e !== message));
+    }, 4000);
+    toastTimeouts.current.push(timeoutId);
+  };
+
   const handleEditorChange = (value) => {
     setCode(value);
-    if (ws.current.readyState === WebSocket.OPEN) {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ type: 'code', code: value }));
     }
   };
 
-  // Inline styles
+  // Inline styles similar to the previous version, plus new styles for status and toasts
   const containerStyle = {
     display: 'flex',
     height: '100vh',
@@ -96,6 +121,34 @@ function App() {
     alignSelf: 'flex-start',
   };
 
+  const statusStyle = {
+    marginBottom: '12px',
+    color:
+      connectionStatus === 'Connected'
+        ? '#43b581'
+        : connectionStatus === 'Disconnected'
+        ? '#f04747'
+        : '#faa61a',
+    fontWeight: 'bold',
+  };
+
+  const toastsContainerStyle = {
+    position: 'fixed',
+    top: 10,
+    right: 10,
+    zIndex: 1000,
+  };
+
+  const toastStyle = {
+    backgroundColor: '#23272a',
+    color: 'white',
+    padding: '10px 20px',
+    marginBottom: '10px',
+    borderRadius: '5px',
+    boxShadow: '0 0 10px rgba(0,0,0,0.3)',
+    minWidth: '200px',
+  };
+
   return (
     <div style={containerStyle}>
       <aside style={sidebarStyle}>
@@ -115,6 +168,7 @@ function App() {
             </div>
           ))}
         </div>
+        <div style={statusStyle}>Status: {connectionStatus}</div>
       </aside>
       <main style={editorContainerStyle}>
         <h2 style={{ color: 'white' }}>Real-Time Collaborative Code Editor</h2>
@@ -140,6 +194,13 @@ function App() {
             minimap: { enabled: false },
           }}
         />
+        <div style={toastsContainerStyle}>
+          {events.map((event, index) => (
+            <div key={index} style={toastStyle}>
+              {event.username} has {event.eventType === 'join' ? 'joined' : 'left'} the session.
+            </div>
+          ))}
+        </div>
       </main>
     </div>
   );

@@ -2,20 +2,15 @@ const express = require('express');
 const WebSocket = require('ws');
 
 const app = express();
-const PORT = 4000;
+const PORT = 3000;
+
 const users = new Set();
 
-
-// Start HTTP server
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
-// Set up WebSocket server on the same HTTP server
-// filepath: e:\collab-code-editor\backend\index.js
-
-const wss = new WebSocket.Server({ server, path: '/ws' });
-
+const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
   let username = 'Anonymous';
@@ -27,10 +22,8 @@ wss.on('connection', (ws) => {
       if (message.type === 'join') {
         username = message.username;
         users.add(username);
-        // Broadcast user list to all clients
         broadcastUsers();
       } else if (message.type === 'code') {
-        // Broadcast code edit to all others
         wss.clients.forEach(client => {
           if (client !== ws && client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ type: 'code', code: message.code }));
@@ -38,7 +31,7 @@ wss.on('connection', (ws) => {
         });
       }
     } catch {
-      // fallback for plain code (older clients)
+      // fallback for plain text messages
       wss.clients.forEach(client => {
         if (client !== ws && client.readyState === WebSocket.OPEN) {
           client.send(msg);

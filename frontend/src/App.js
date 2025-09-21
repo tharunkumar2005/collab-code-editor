@@ -11,7 +11,6 @@ function App() {
 
   useEffect(() => {
     if (!username) {
-      // Prompt for username
       const inputName = prompt("Enter your username:", `User${Math.floor(Math.random() * 1000)}`);
       setUsername(inputName || `User${Math.floor(Math.random() * 1000)}`);
     }
